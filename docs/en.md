@@ -1,61 +1,113 @@
-# Demo Devices Template
+# sonnenBatterie
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+**Unofficial** integration, not affiliated with sonnen. It reads your
+**sonnenBatterie** (eco, 10, hybrid...) on your local network, through its
+local API v2 (HTTP), with a read token, without any cloud.
+
+**Never tested with a real device**: the integration was written from the
+[sonnen-api-v2](https://github.com/Katamave/sonnen_api_v2) library and the API
+documentation the battery serves at `/api/doc.html`, without a sonnenBatterie
+at hand. Your feedback is welcome.
+
+## Read-only
+
+The integration **only reads** (GET requests of the read API). It never
+changes the operating mode, never forces a charge or a discharge and changes
+no setting. A **read** token is enough.
 
 ## What you get
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+One "sonnenBatterie" device (one battery per integration: the one whose token
+is entered; the read API gives no serial number):
+
+- usable state of charge (USOC, %, the one of the sonnen app), relative state
+  of charge (RSOC), usable energy remaining (kWh);
+- charge and discharge power (W), battery power (W, positive when
+  discharging), state (0 = idle, 1 = charging, 2 = discharging);
+- solar power (W) and **the solar production index** of the production meter
+  of the battery, for the Gladys energy monitoring (with its 30-minute
+  production, computed by Gladys);
+- house consumption (W, average, and a counter in kWh);
+- grid exchange (W, positive when the home imports, negative when it
+  exports), grid state (0 = on grid, 1 = off grid, backup), voltage and
+  frequency;
+- backup buffer (%), operating mode (1 = manual, 2 = self-consumption,
+  6 = module extension, 10 = time of use), discharge not allowed (0/1);
+- cycles, minimum and maximum cell temperatures, DC voltage, full charge
+  capacity and installed capacity.
+
+### No double count
+
+The consumption meter of the battery measures the house consumption, which
+the main meter of the home (Linky...) already counts in Gladys. It is
+therefore published as a **plain sensor**, never as a consumption index:
+nothing is billed twice. The integration sends no daily consumption. Only the
+**solar production** index feeds the energy monitoring.
+
+## Requirements
+
+- Gladys 5.2.0 or later.
+- The battery on the same network as Gladys, its API reachable over HTTP
+  (port 80).
+- A read token: in the local web interface of the battery
+  (`http://<battery-address>`), menu **Software-Integration**, **JSON API**,
+  turn on **Read API** and copy the token.
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+1. Install the integration from the Gladys store.
+2. **Battery IP address**: its address on your network (with `:port` only if
+   it is not 80). Preferably give it a fixed address in your router.
+3. **Read token**: kept by Gladys in its database, never shown again, sent
+   only to the battery (in the header of its requests), never logged.
+4. **Reading interval**: 30 s by default, 30 to 300 s (five small requests a
+   read).
+5. After the first read, create the device from the **Discover** tab.
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+The **Test the connection** button reads the battery once if the interval has
+passed; otherwise it shows the last read and when the next one can be.
 
-## Actions
+## Pace of the reads
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+Nothing reads the battery faster than the interval: not the test button, not
+the Discover tab, not a reconnection to Gladys, not a save of an unchanged
+configuration, not a restart of the container (the time of the last read is
+kept in `/data`, written at most once a minute: after a restart, the first
+read waits the interval plus a minute). A new address or a new token is tried
+at once.
 
-## Scenes
+## Held index
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+Gladys counts every rise of an index in full. So that no fictive energy is
+ever counted, the solar production index goes through a guard:
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+- a value of 0 is never sent;
+- a drop, or a rise faster than 30 kW on average, is **held back**: the last
+  accepted value is sent again, and the status of the integration shows it.
+  Neither time nor repetition confirms it;
+- if it is right, click **Accept the held index** **twice**: the first click
+  lists what is held and accepts nothing, the second, 3 seconds to 5 minutes
+  later, accepts exactly what was listed (a jump is then counted at once, a
+  drop counts nothing). Saving the configuration accepts nothing.
 
-## Dashboard
+## Errors
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+- **Token refused** (HTTP 401/403): the reads stop, the status says so.
+  Without a change, a new try comes after 15 minutes, then 30, up to 6 hours;
+  this stop is kept in `/data` across a restart. A new token saved is tried at
+  once. To recognise a refused token after a restart, `/data` keeps a salted
+  fingerprint of that refused token only (never of the right one), erased by
+  the first successful read.
+- An HTTP 429 or 5xx of the configuration pauses the battery from 1 minute to
+  6 hours, kept in `/data`. An error of another endpoint only leaves its
+  values out: the others are published.
+- An unreachable battery is tried again after 1 minute, then 2, up to
+  15 minutes, never faster than the interval.
+- Every read starts with the configuration, with the token: another battery
+  taking the address (DHCP) refuses that token and gives nothing.
 
-## Troubleshooting
+## Privacy
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+Nothing leaves your network: the integration only talks to the battery, over
+local HTTP, and follows no redirect. The token travels in clear on your local
+network, as for the app of the battery.

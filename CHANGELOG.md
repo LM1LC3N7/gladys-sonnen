@@ -12,44 +12,34 @@ the notes of the version's GitHub Release.
 
 ### Added
 
-- A working example of scene triggers, scene actions and dashboard widgets
-  (Gladys 5.1.0 or later).
-- `CHANGELOG.md`, rolled by the Release workflow.
-- A GitHub Release for every version, with its changelog section as notes: the
-  Gladys Supervision page links each version to the repository's releases.
-- CI runs the tests on Node 22 and 24, and builds the Docker image.
-- Dependabot keeps the npm dependencies and the GitHub Actions up to date.
-- `SECURITY.md` (how to report a vulnerability) and `CLAUDE.md` (project rules
-  for contributors and coding assistants).
-- Manifest tests: `version` matches `package.json`, `docker_image` is tagged
-  with it, descriptions hold 10 to 100 characters, placeholders are
-  multi-language objects.
-- The latitude and longitude fields show an example value as placeholder.
+- Local reading of a sonnenBatterie through its API v2 (HTTP, read token in
+  the `Auth-Token` header), as the sonnen-api-v2 library does: configuration,
+  status, latest data, meters and battery modules, every 30 s by default (30
+  to 300 s). Read-only: no operating mode, no charge or discharge is ever
+  sent.
+- One device: usable and relative state of charge, usable energy remaining,
+  charge and discharge power, battery power and state, solar power, house
+  consumption (power, average, counter), grid exchange as `grid-sensor` /
+  `power`, grid state (on grid / off grid), voltage, frequency, backup
+  buffer, operating mode, discharge not allowed, cycles, cell temperatures,
+  DC voltage, full charge and installed capacity.
+- The solar production meter as the only energy index (with its 30-minute
+  production), through the guard of gladys-p1-monitor: never 0, jumps and
+  drops held until the "Accept the held index" button is clicked twice. The
+  house consumption counter stays a plain sensor: no double count with the
+  main meter.
+- Never a read faster than the interval: not the test button, Discovery, a
+  reconnection, a save of an unchanged configuration nor a restart (the last
+  request is kept in `/data`, written at most once a minute). A read that
+  ends after a restart or a new configuration publishes nothing.
+- A refused token stops the reads, kept in `/data` (a salted fingerprint of
+  the refused token only, erased by the first success), tried again after
+  15 minutes doubled up to 6 hours; a new token is tried at once. HTTP 429
+  and 5xx of the configuration pause the reads from 1 minute to 6 hours; an
+  error of another endpoint only leaves its values out. Answers bounded to
+  64 KiB, no redirect followed, the token never logged.
+- "Test the connection" and "Accept the held index" buttons.
+- Documentation in English and French; `LICENSE` (Apache-2.0) and
+  `THIRD_PARTY_NOTICES.md` (MIT notice of sonnen-api-v2), shipped in the image.
 
-### Changed
-
-- Node.js 22 or later is required (Node 20 is end-of-life).
-- Integration SDK 0.15.0. The tests now run against the fake Gladys of the
-  SDK, which refuses the payloads Gladys refuses.
-- The refresh interval is one minute minimum, the fastest Gladys polls a
-  device. The plug's power is only sent when it changes, and every 30
-  minutes otherwise.
-
-### Fixed
-
-- Gladys refused the devices of the Discovery tab: the weather station and
-  the plug declared their poll frequency in seconds instead of one of the
-  values Gladys accepts, and were never polled. They now poll every minute,
-  and the readings follow the refresh interval of the configuration.
-
-- The release commit no longer fails `npm run format:check`: the Release
-  workflow updates the manifest `version` and `docker_image` in place instead
-  of re-printing the whole file with `jq`.
-- The integration can write to `/data`: the image creates the directory owned
-  by the `node` user, a new Docker volume was owned by root.
-- A sub-container running the integration's own image follows it to the new
-  tag at each release, as well as in the manifest of the build summary: it kept
-  the previous tag, which may not exist on the registry. Sub-containers on a
-  third-party image (a broker, a database...) keep theirs.
-
-[Unreleased]: https://github.com/GladysAssistant/integration-template-js/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-sonnen/commits/main
