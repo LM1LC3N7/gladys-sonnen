@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-21
+
 ### Added
 
 - Local reading of a sonnenBatterie through its API v2 (HTTP, read token in
@@ -53,4 +55,5 @@ the notes of the version's GitHub Release.
 - Documentation in English and French; `LICENSE` (Apache-2.0) and
   `THIRD_PARTY_NOTICES.md` (MIT notice of sonnen-api-v2), shipped in the image.
 
-[Unreleased]: https://github.com/LM1LC3N7/gladys-sonnen/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-sonnen/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-sonnen/releases/tag/v0.1.1

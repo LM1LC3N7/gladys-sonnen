@@ -1,6 +1,6 @@
 {
   "name": "gladys-sonnen",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "sonnenBatterie for Gladys Assistant: state of charge, powers, solar, grid and the solar production index read through the local API v2 of the battery. Read-only.",
   "type": "module",
