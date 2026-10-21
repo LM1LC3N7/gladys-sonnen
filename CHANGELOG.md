@@ -39,6 +39,17 @@ the notes of the version's GitHub Release.
   error of another endpoint only leaves its values out. Answers bounded to
   64 KiB, no redirect followed, the token never logged.
 - "Test the connection" and "Accept the held index" buttons.
+- A "Solar production" option, chosen before creating the device: the
+  production meter as the energy index (default) or as a plain sensor only,
+  when the solar inverter already sends its production to Gladys (no double
+  count); the docs warn about it.
+- Only a refusal of the configuration stops the reads: a secondary endpoint
+  refusing the token only leaves its values out, with a note in the status.
+- Once per start, the configuration is asked without a token: a battery that
+  answers anyway is noted in the status (give it a fixed address).
+- A 401 status says the address may no longer be the battery; production and
+  consumption from -200 W to 0 read 0; after a restart, a battery read before
+  is shown connected until its next read.
 - Documentation in English and French; `LICENSE` (Apache-2.0) and
   `THIRD_PARTY_NOTICES.md` (MIT notice of sonnen-api-v2), shipped in the image.
 

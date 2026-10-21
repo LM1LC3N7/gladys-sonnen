@@ -34,6 +34,7 @@ import {
   INDEX_LIMITS,
   PAUSE_MAX,
   PAUSE_MIN,
+  PV_SENSOR_ONLY,
   REFUSED_FIRST,
   REFUSED_MAX,
   RETRY_MAX,
@@ -108,6 +109,11 @@ export class SonnenApp {
     this.valuesAt = undefined;
     this.readAt = undefined;
     this.missing = [];
+    /** The secondary endpoints that refuse the (good) token, at the last read. */
+    this.denied = [];
+    /** The address checked once for a configuration answering without a token, and the answer. */
+    this.openChecked = undefined;
+    this.openApi = false;
     /** A battery read once (now or before the restart): its device is in Discovery. */
     this.known = Boolean(this.kept.info);
     /** By index feature external id: IndexGuard. */
@@ -261,7 +267,14 @@ export class SonnenApp {
 
   async discover({ force = false } = {}) {
     const devices =
-      this.known && this.config.address ? [buildDevice(this.gladys, this.info())] : [];
+      this.known && this.config.address
+        ? [
+            buildDevice(this.gladys, this.info(), {
+              pvIndex: this.config.pvIndex,
+              created: this.createdDevice(),
+            }),
+          ]
+        : [];
     const json = JSON.stringify(devices);
     if (!force && json === this.publishedDevices) {
       return;
@@ -317,7 +330,7 @@ export class SonnenApp {
     await this.saveState();
     if (prepared && generation === this.generation) {
       await this.send(prepared);
-      await this.updateStatus();
+      if (generation === this.generation) await this.updateStatus();
     }
   }
 
@@ -446,6 +459,7 @@ export class SonnenApp {
     this.valuesAt = this.monotonic();
     this.readAt = this.now();
     this.missing = answers.missing;
+    this.denied = answers.denied ?? [];
     const prepared = this.prepare(this.values);
     // Saved BEFORE Gladys gets the values: a crash in between never sends an
     // index /data does not know.
@@ -453,7 +467,15 @@ export class SonnenApp {
     if (!alive()) return;
     if (prepared) await this.send(prepared);
     if (!alive()) return;
+    if (this.openChecked !== address) {
+      // Once per start of the container and address: does the configuration
+      // answer without any token? Then only the address tells the battery.
+      this.openChecked = address;
+      this.openApi = await this.client.answersWithoutToken(address);
+      if (!alive()) return;
+    }
     await this.discover();
+    if (!alive()) return;
     await this.updateStatus();
   }
 
@@ -521,7 +543,8 @@ export class SonnenApp {
     const external = this.external();
     const now = this.now();
     const indexes = {};
-    for (const { name, key, value } of INDEXES) {
+    // "Sensor only": the index never gets a value (nor goes through its guard).
+    for (const { name, key, value } of this.indexMode() ? INDEXES : []) {
       const id = external.feature(key);
       const guard = this.guardOf(created, id, INDEX_LIMITS[name]);
       const total = values[value] === undefined ? undefined : round(values[value], 3);
@@ -575,10 +598,15 @@ export class SonnenApp {
 
   // --- Status ------------------------------------------------------------------------
 
+  /** Whether the solar production goes to the energy monitoring (option `pv_index`). */
+  indexMode() {
+    return this.config.pvIndex !== PV_SENSOR_ONLY;
+  }
+
   /** Every index held back: `{ id, name, direction, from, to }`. */
   heldList() {
     const created = this.createdDevice();
-    if (!created) return [];
+    if (!created || !this.indexMode()) return [];
     const list = [];
     for (const { name, key } of INDEXES) {
       const id = this.external().feature(key);
@@ -612,12 +640,20 @@ export class SonnenApp {
     }
     if (!this.values) {
       const at = this.nextReadAt();
-      await this.setStatus(false, starting && at <= now ? T.connecting : T.waiting(at));
+      if (starting && at <= now) {
+        await this.setStatus(false, T.connecting);
+      } else {
+        // After a restart, a battery read before (no refusal, no pause, no
+        // error) is shown connected until its next read.
+        await this.setStatus(this.known, T.waiting(at));
+      }
       return;
     }
     const notes = [];
     if (!this.createdDevice()) notes.push(T.notes.noDevice);
     if (this.missing.length > 0) notes.push(T.notes.missing(this.missing));
+    if (this.denied.length > 0) notes.push(T.notes.denied(this.denied));
+    if (this.openApi) notes.push(T.notes.openApi);
     const held = this.heldList();
     if (held.length > 0) notes.push(T.notes.held(held));
     await this.setStatus(true, T.ok(this.kept.info?.firmware, notes));

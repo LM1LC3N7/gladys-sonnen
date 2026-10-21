@@ -66,6 +66,10 @@ export const ACCEPT_CONFIRM_WITHIN = 5 * MINUTE;
 export const FRESH_INTERVALS = 2;
 
 // --- Energy index ---------------------------------------------------------------------
+/** The `pv_index` option: the solar index in the energy monitoring, or a plain sensor only. */
+export const PV_ENERGY_MONITORING = 'energy_monitoring';
+export const PV_SENSOR_ONLY = 'sensor_only';
+
 /**
  * The guard of each index (src/guard.js), its own margin: the production
  * meter of a sonnenBatterie measures the whole solar installation (the

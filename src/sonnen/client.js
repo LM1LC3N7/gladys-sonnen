@@ -105,7 +105,9 @@ export class SonnenClient {
     try {
       response = await this.fetch(`http://${address}${path}`, {
         method: 'GET',
-        headers: { Accept: 'application/json', 'Auth-Token': token },
+        headers: token
+          ? { Accept: 'application/json', 'Auth-Token': token }
+          : { Accept: 'application/json' },
         // A redirect is never followed: the token stays on this address.
         redirect: 'manual',
         signal: AbortSignal.timeout(this.timeout),
@@ -140,6 +142,19 @@ export class SonnenClient {
     return answer;
   }
 
+  /**
+   * Whether the configuration answers WITHOUT any token (once per start): then
+   * the token no longer tells two batteries apart, only the address does.
+   * Never throws: any error or refusal is false.
+   */
+  async answersWithoutToken(address) {
+    try {
+      return isConfigurations(await this.get(address, PATHS.CONFIGURATIONS, undefined));
+    } catch {
+      return false;
+    }
+  }
+
   /** The configuration: the token check (an answer of a sonnenBatterie, accepted). */
   async readConfigurations(address, token) {
     const answer = await this.get(address, PATHS.CONFIGURATIONS, token);
@@ -153,14 +168,21 @@ export class SonnenClient {
    * One read: the configuration first (required: it proves that the battery
    * at this address takes this token), then each secondary endpoint. A
    * secondary endpoint that fails with an error of the battery (5xx, an odd
-   * answer) only leaves its values out (`missing`); a refused token or a 429
-   * stops the read; a network failure stops the remaining requests (kept:
-   * what came). `alive()` false (a restart, a new configuration) stops
-   * between two requests.
-   * @returns {Promise<{ configurations, status?, latest?, powermeter?, battery?, missing: string[] }>}
+   * answer) only leaves its values out (`missing`); one that refuses the
+   * token (401/403) too (`denied`: the configuration just took this token,
+   * so the token is good, that endpoint is only closed to it); only a refusal
+   * of the configuration is a refused token. A 429 stops the read; a network
+   * failure stops the remaining requests (kept: what came). `alive()` false
+   * (a restart, a new configuration) stops between two requests.
+   * @returns {Promise<{ configurations, status?, latest?, powermeter?, battery?,
+   *   missing: string[], denied: string[] }>}
    */
   async readAll(address, token, alive = () => true) {
-    const result = { configurations: await this.readConfigurations(address, token), missing: [] };
+    const result = {
+      configurations: await this.readConfigurations(address, token),
+      missing: [],
+      denied: [],
+    };
     for (const [name, path] of SECONDARY) {
       if (!alive()) {
         break;
@@ -168,8 +190,12 @@ export class SonnenClient {
       try {
         result[name] = await this.get(address, path, token);
       } catch (err) {
-        if (err.code === 'refused' || err.code === 'rate_limited') {
+        if (err.code === 'rate_limited') {
           throw err;
+        }
+        if (err.code === 'refused') {
+          result.denied.push(name);
+          continue;
         }
         result.missing.push(name);
         if (err.code === 'timeout' || err.code === 'unreachable') {

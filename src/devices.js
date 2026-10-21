@@ -12,7 +12,11 @@
 //   declared here, ids computed (UUID v5) so that an "Update" in Discovery
 //   keeps the same rows; the integration never publishes that one). It goes
 //   through the guard (src/guard.js): never 0, a jump or a drop held until the
-//   user accepts it;
+//   user accepts it. With the option "Sensor only" (an inverter already sends
+//   its production to Gladys: counted twice otherwise), chosen before the
+//   device is created, the same meter is a plain sensor instead
+//   (`pv_energy_total`, never counted); a device created with the index keeps
+//   that feature, which then gets no value;
 // - NO `energy-sensor` / `index`, no `daily-consumption`, never
 //   publishEnergyConsumption: the consumption meter of the battery measures
 //   the house consumption, which the main meter of the home (Linky...) already
@@ -32,7 +36,14 @@ import {
   DEVICE_FEATURE_TYPES as T,
   DEVICE_FEATURE_UNITS as U,
 } from '@gladysassistant/integration-sdk';
-import { DEVICE_KEY, ENERGY_MAX, EXTERNAL_ID_TYPE, POWER_MAX } from './constants.js';
+import {
+  DEVICE_KEY,
+  ENERGY_MAX,
+  EXTERNAL_ID_TYPE,
+  POWER_MAX,
+  PV_ENERGY_MONITORING,
+  PV_SENSOR_ONLY,
+} from './constants.js';
 
 /** Feature keys (forever). */
 export const FEATURE = {
@@ -47,6 +58,8 @@ export const FEATURE = {
   PV_ENERGY: 'pv_energy',
   /** 30-minute production: fed by the Gladys core from the index, never by the integration. */
   PV_30MIN: 'pv_energy_production',
+  /** The same meter as a plain sensor (option "Sensor only"): never counted. */
+  PV_ENERGY_SENSOR: 'pv_energy_total',
   CONSUMPTION_POWER: 'consumption_power',
   CONSUMPTION_AVERAGE: 'consumption_average',
   CONSUMPTION_ENERGY: 'consumption_energy',
@@ -93,7 +106,12 @@ export function uuidOf(name) {
 // Each entry: the feature key, the value of src/sonnen/model.js it shows, its
 // rounding, and how it is declared.
 
-const def = (key, value, digits, spec) => ({ key, value, digits, spec });
+/**
+ * `pv`: the `pv_index` option an entry belongs to (PV_ENERGY_MONITORING: the
+ * index and its 30-minute production; PV_SENSOR_ONLY: the plain sensor);
+ * undefined: always declared.
+ */
+const def = (key, value, digits, spec, pv) => ({ key, value, digits, spec, pv });
 
 const measure = (name, category, type, extra = {}) => ({ name, category, type, ...extra });
 /** A value shown, never summed nor billed: no energy category, no unit (it is in the name). */
@@ -161,6 +179,7 @@ export const CATALOG = [
     'pvEnergy',
     3,
     index('Solar production index', T.ENERGY_PRODUCTION_SENSOR.INDEX),
+    PV_ENERGY_MONITORING,
   ),
   // Declared only: the core computes it from the index.
   def(
@@ -171,6 +190,14 @@ export const CATALOG = [
       'Solar production index (30-minute production)',
       T.ENERGY_PRODUCTION_SENSOR.THIRTY_MINUTES_PRODUCTION,
     ),
+    PV_ENERGY_MONITORING,
+  ),
+  def(
+    FEATURE.PV_ENERGY_SENSOR,
+    'pvEnergy',
+    3,
+    plain('Solar production (kWh, total, not counted)', { max: ENERGY_MAX }),
+    PV_SENSOR_ONLY,
   ),
   def(
     FEATURE.CONSUMPTION_POWER,
@@ -253,13 +280,34 @@ export const CATALOG = [
   ),
 ];
 
-/** The device of the battery. `info`: `{ address, firmware, modules }`. */
-export function buildDevice(gladys, info = {}) {
+/** The feature keys of a created device (its features are fixed at its creation). */
+export function keysOfDevice(device) {
+  return new Set(
+    (device?.features ?? []).map((f) =>
+      String(f.external_id ?? '')
+        .split(':')
+        .at(-1),
+    ),
+  );
+}
+
+/**
+ * The catalog entries of the device: those of the `pv_index` option, plus
+ * every one the created device already has (published again, a device never
+ * loses a feature: "Update" in Discovery would drop its history).
+ */
+export function entriesFor(pvIndex = PV_ENERGY_MONITORING, createdKeys = new Set()) {
+  return CATALOG.filter((e) => !e.pv || e.pv === pvIndex || createdKeys.has(e.key));
+}
+
+/**
+ * The device of the battery. `info`: `{ address, firmware, modules }`;
+ * `pvIndex`: the option; `created`: the device the user created, if any.
+ */
+export function buildDevice(gladys, info = {}, { pvIndex, created } = {}) {
   const external = ids(gladys);
   const pvIndexId = external.feature(FEATURE.PV_ENERGY);
-  // Every feature of the catalog, always: a device never loses a feature
-  // ("Update" in Discovery would drop its history).
-  const features = CATALOG.map(({ key, spec }) => {
+  const features = entriesFor(pvIndex, keysOfDevice(created)).map(({ key, spec }) => {
     const feature = {
       min: 0,
       read_only: true,

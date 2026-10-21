@@ -13,7 +13,14 @@ import {
   DEVICE_FEATURE_UNITS as U,
 } from '@gladysassistant/integration-sdk';
 import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { ACTIONS, POLL_DEFAULT, POLL_MAX, POLL_MIN } from '../src/constants.js';
+import {
+  ACTIONS,
+  POLL_DEFAULT,
+  POLL_MAX,
+  POLL_MIN,
+  PV_ENERGY_MONITORING,
+  PV_SENSOR_ONLY,
+} from '../src/constants.js';
 import { CATALOG, INDEXES, buildDevice } from '../src/devices.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -83,7 +90,13 @@ test('every text is in English and French; placeholders too', () => {
 
 test('the configuration matches the code; the token is a secret, described as kept, never shown', () => {
   const fields = Object.fromEntries(manifest.config_schema.map((f) => [f.key, f]));
-  assert.deepEqual(Object.keys(fields), ['intro', 'address', 'token', 'poll_interval']);
+  assert.deepEqual(Object.keys(fields), ['intro', 'address', 'token', 'pv_index', 'poll_interval']);
+  assert.deepEqual(
+    fields.pv_index.options.map((o) => o.value),
+    [PV_ENERGY_MONITORING, PV_SENSOR_ONLY],
+  );
+  assert.equal(fields.pv_index.default, PV_ENERGY_MONITORING);
+  assert.match(fields.pv_index.description.en, /counted twice.*before creating the device/);
   assert.equal(fields.address.type, 'string');
   assert.equal(fields.token.type, 'secret');
   assert.match(fields.token.description.en, /Kept by Gladys in its database, never shown again/);
@@ -141,9 +154,19 @@ const UNITS_BY_CATEGORY = {
 
 test('every feature uses a unit the core accepts for its category; keys unique', () => {
   const gladys = createFakeGladys({ selector: 'sonnen' });
-  const device = buildDevice(gladys, { address: 'x:80' });
+  const index = buildDevice(gladys, { address: 'x:80' });
+  const sensor = buildDevice(gladys, { address: 'x:80' }, { pvIndex: PV_SENSOR_ONLY });
+  const ext = (d) => d.features.map((f) => f.external_id.split(':').at(-1));
+  assert.ok(ext(index).includes('pv_energy') && !ext(index).includes('pv_energy_total'));
+  assert.ok(ext(sensor).includes('pv_energy_total') && !ext(sensor).includes('pv_energy'));
+  // A device created with the index keeps it under "Sensor only" (no feature lost).
+  const kept = buildDevice(gladys, {}, { pvIndex: PV_SENSOR_ONLY, created: index });
+  assert.ok(ext(kept).includes('pv_energy') && ext(kept).includes('pv_energy_production'));
   const keys = new Set();
-  for (const f of device.features) {
+  for (const f of [
+    ...index.features,
+    ...sensor.features.filter((f) => /total$/.test(f.external_id)),
+  ]) {
     assert.ok(f.category in UNITS_BY_CATEGORY, `${f.external_id}: ${f.category}`);
     if (f.unit !== undefined) {
       assert.ok(UNITS_BY_CATEGORY[f.category].includes(f.unit), `${f.external_id}: ${f.unit}`);

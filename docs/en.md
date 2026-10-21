@@ -44,6 +44,16 @@ therefore published as a **plain sensor**, never as a consumption index:
 nothing is billed twice. The integration sends no daily consumption. Only the
 **solar production** index feeds the energy monitoring.
 
+**Solar production and inverter**: a sonnenBatterie eco is AC-coupled, with a
+separate solar inverter (SMA, Fronius, SolarEdge, Kostal...), and its
+production meter measures that inverter. If your inverter already sends its
+production to Gladys, **keep only one source**: choose **Sensor only** in
+"Solar production" **before** creating the device. The production is then a
+plain sensor (kWh, never counted) and the index gets nothing. Changing this
+choice after the creation: a created device keeps all its features (none is
+removed), only the feature of the current choice gets values; for a clean
+device, delete it and create it again.
+
 ## Requirements
 
 - Gladys 5.2.0 or later.
@@ -103,8 +113,14 @@ ever counted, the solar production index goes through a guard:
   values out: the others are published.
 - An unreachable battery is tried again after 1 minute, then 2, up to
   15 minutes, never faster than the interval.
+- Only a refusal of the **configuration** is a refused token. If another part
+  of the API (meters, modules...) refuses the token while the configuration
+  takes it, only its values are missing, the status says so, the reads go on.
 - Every read starts with the configuration, with the token: another battery
-  taking the address (DHCP) refuses that token and gives nothing.
+  taking the address (DHCP) refuses that token and gives nothing. Once per
+  start, the integration also asks for the configuration without a token: if
+  the battery answers anyway, the status advises a fixed address (only the
+  address identifies it then).
 
 ## Privacy
 

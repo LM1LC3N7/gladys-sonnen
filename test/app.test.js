@@ -76,7 +76,11 @@ async function setup({
 }
 
 const status = (gladys) => gladys.fake.connectionStatus;
-const configReads = (fake) => fake.calls.filter((c) => c.path === '/api/v2/configurations').length;
+/** The reads (configuration with the token); the one check without a token is not one. */
+const configReads = (fake) =>
+  fake.calls.filter(
+    (c) => c.path === '/api/v2/configurations' && c.init.headers['Auth-Token'] !== undefined,
+  ).length;
 const last = (gladys, key) => gladys.fake.lastState(F(key));
 const text = (message) => `${message.en} ${message.fr}`;
 
@@ -295,7 +299,7 @@ test('429 / 5xx of the configuration: a pause kept in /data; the test button nev
   assert.match(answer.en, /too many requests 429/);
   assert.equal(fake.calls.length, 1);
   await tick(5 * MINUTE);
-  assert.equal(fake.calls.length, 6, 'read again after the pause');
+  assert.equal(configReads(fake), 2, 'read again after the pause');
   assert.equal(store.data.pause, null);
   const server = await setup({ routes: battery({ fail: { '/api/v2/configurations': 500 } }) });
   await server.app.start(CONFIG);
@@ -397,4 +401,110 @@ test('each connection publishes the status and the device again', async () => {
   assert.ok(gladys.fake.connectionStatuses.length > statuses);
   assert.equal(gladys.fake.bodies('POST', '/discovered_device').length, discoveries + 1);
   assert.equal(gladys.fake.discoveredDevices.length, 1);
+});
+
+test('review 1, point 1: a 401 of a secondary endpoint never stops the reads nor keeps a fingerprint', async () => {
+  const store = createMemoryStore();
+  const routes = battery({ fail: { '/api/v2/battery': 401 } });
+  const { app, gladys, fake, tick } = await setup({ store, routes, devices: [created()] });
+  await app.start(CONFIG);
+  await app.idle();
+  assert.equal(last(gladys, 'usoc'), 81);
+  assert.equal(last(gladys, 'pv_energy'), 3969.8);
+  assert.equal(last(gladys, 'cycles'), undefined);
+  assert.equal(store.data.refusal, null);
+  assert.ok(!JSON.stringify(store.data).includes('"fp"'));
+  assert.equal(status(gladys).connected, true);
+  assert.match(status(gladys).message.fr, /refusent le jeton de lecture.*modules de batterie/);
+  await tick(POLL);
+  assert.equal(configReads(fake), 2, 'the next read at the interval');
+});
+
+test('review 1, point 2: "Sensor only": the production is a plain sensor, the index never gets a value', async () => {
+  const gladys0 = createFakeGladys({ selector: SELECTOR });
+  const sensorDevice = buildDevice(gladys0, { address: ADDRESS }, { pvIndex: 'sensor_only' });
+  const config = { ...CONFIG, pv_index: 'sensor_only' };
+  const a = await setup({ config, devices: [sensorDevice] });
+  await a.app.start(config);
+  await a.app.idle();
+  assert.equal(last(a.gladys, 'pv_energy_total'), 3969.8);
+  assert.equal(last(a.gladys, 'pv_energy'), undefined);
+  const [published] = a.gladys.fake.discoveredDevices;
+  assert.ok(!published.features.some((f) => f.external_id === F('pv_energy')));
+  // A device created with the index keeps its feature, which gets nothing.
+  const b = await setup({ config, devices: [created()] });
+  await b.app.start(config);
+  await b.app.idle();
+  assert.equal(last(b.gladys, 'pv_energy'), undefined);
+  assert.equal(last(b.gladys, 'usoc'), 81);
+  const [kept] = b.gladys.fake.discoveredDevices;
+  assert.ok(kept.features.some((f) => f.external_id === F('pv_energy')));
+  assert.equal(
+    (await b.gladys.fake.action(ACTIONS.ACCEPT_HELD)).data.message.en,
+    'No index is held back: nothing to accept.',
+  );
+});
+
+test('review 1, point 3: a battery answering without a token is noted, checked once per start', async () => {
+  const routes = battery();
+  const open = routes['/api/v2/configurations'];
+  routes['/api/v2/configurations'] = (call) =>
+    call.init.headers['Auth-Token'] === undefined ? json({ EM_OperatingMode: '2' }) : open(call);
+  const { app, gladys, fake, tick } = await setup({ routes });
+  await app.start(CONFIG);
+  await app.idle();
+  assert.match(status(gladys).message.fr, /répond sans jeton.*adresse fixe/);
+  await tick(POLL);
+  const withoutToken = fake.calls.filter((c) => c.init.headers['Auth-Token'] === undefined);
+  assert.equal(withoutToken.length, 1);
+  const closed = await setup();
+  await closed.app.start(CONFIG);
+  await closed.app.idle();
+  assert.doesNotMatch(status(closed.gladys).message.fr, /sans jeton/);
+});
+
+test('review 1, point 4: a 401 says it may no longer be the battery at this address', async () => {
+  const { app, gladys } = await setup({ routes: battery({ token: 'another-token-99' }) });
+  await app.start(CONFIG);
+  await app.idle();
+  assert.match(status(gladys).message.fr, /ou ce n’est plus la batterie à cette adresse/);
+  assert.match(status(gladys).message.en, /or it is no longer the battery at this address/);
+});
+
+test('review 1, point 6: after a restart, a battery read before shows connected until its next read', async () => {
+  const store = createMemoryStore();
+  const clock = { now: NOW };
+  const a = await setup({ store, clock });
+  await a.app.start(CONFIG);
+  await a.app.idle();
+  await a.app.stop();
+  const b = await setup({ store, clock });
+  await b.app.start(CONFIG);
+  await b.app.idle();
+  assert.equal(b.fake.calls.length, 0);
+  assert.equal(status(b.gladys).connected, true);
+  assert.match(status(b.gladys).message.en, /next read at 10:01:30 UTC/);
+  // Never read before: not connected while waiting.
+  const fresh = await setup({
+    store: createMemoryStore({ lastAttemptAt: NOW, address: ADDRESS }),
+    clock,
+  });
+  await fresh.app.start(CONFIG);
+  await fresh.app.idle();
+  assert.equal(status(fresh.gladys).connected, false);
+});
+
+test('review 1, point 8: a restart during the Discovery of a read leaves it without status', async () => {
+  const { app, gladys } = await setup();
+  let calls = 0;
+  const publish = gladys.publishDiscoveredDevices.bind(gladys);
+  gladys.publishDiscoveredDevices = async (devices) => {
+    calls += 1;
+    if (calls === 2) app.generation += 1;
+    return publish(devices);
+  };
+  await app.start(CONFIG);
+  await app.idle();
+  assert.equal(calls, 2);
+  assert.equal(gladys.fake.connectionStatuses.length, 1, 'only the status of the start');
 });

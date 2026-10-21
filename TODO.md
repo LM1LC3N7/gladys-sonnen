@@ -105,6 +105,37 @@
   (shown in the status); a network failure stops the remaining requests of
   the read.
 - **Unreachable**: 1 min (never faster than a read), doubled up to 15 min.
+- **Only the configuration refuses a token** (review 1, point 1): a 401/403
+  of a secondary endpoint, after the configuration took the token, only
+  leaves that endpoint out (`denied`, a note in the status); the reads go on
+  at their pace and no refusal nor fingerprint is written (the token is good).
+- **Solar production option** (review 1, point 2): `pv_index`, "Energy
+  monitoring" (default: the guarded index) or "Sensor only" (the same meter as
+  the plain sensor `pv_energy_total`, never counted), chosen before creating
+  the device, as in gladys-engie-belgium: an AC-coupled sonnenBatterie eco has
+  a separate inverter that may already send the same production to Gladys.
+  A created device never loses a feature: the feature of the other choice
+  stays declared and gets no value. Docs fr/en warn about the double count.
+- **Check without a token** (review 1, point 3): once per start and address,
+  after the first good read, one `GET /api/v2/configurations` without
+  `Auth-Token`; if it answers as a sonnenBatterie, the status advises a fixed
+  address (the token then identifies nothing). Never a fingerprint of the
+  hardware.
+- **401 wording** (review 1, point 4): the status says the address may no
+  longer be the battery (DHCP), before telling the user to check the token.
+- **Stand-by readings** (review 1, point 5): production, consumption and its
+  average from -200 W to 0 are 0 (an inverter at night), never the last value
+  of the day; further below, left out.
+- **Status after a restart** (review 1, point 6): a battery read before,
+  without refusal, pause nor error, is shown connected, "next read at ...",
+  until its first read (interval + 1 minute).
+- **New address clears the pause** (review 1, point 7, kept on purpose): a
+  pause (429/5xx) and a refusal belong to an address; saving another address
+  (even the host name of the same battery) starts afresh and reads at once.
+  It takes a gesture of the user, one request per save, and a pause asked by
+  the battery is then asked again if still needed.
+- **Generation after every await** (review 1, point 8): checked between the
+  Discovery and the status of a read, and in `publishLast`.
 - **States per minute**: a sliding budget of 270 states over 60 s, taken
   before each publication (two publications at once never both pass).
 - **Device created**: it gets the values of the last read at once (if fresh:

@@ -99,8 +99,8 @@ export const T = {
     fr: `sonnenBatterie : prochaine lecture à ${clock(at)}.`,
   }),
   refused: (address, refusal, wait) => ({
-    en: `${address} refuses the read token (HTTP ${refusal.status}): check it in the web interface of the battery (Software-Integration, JSON API, Read API) and save it again. Without a change, new try in ${delay(wait).en}.`,
-    fr: `${address} refuse le jeton de lecture (HTTP ${refusal.status}) : vérifiez-le dans l’interface web de la batterie (Software-Integration, JSON API, Read API) puis enregistrez-le de nouveau. Sans changement, nouvel essai dans ${delay(wait).fr}.`,
+    en: `${address} refuses the read token (HTTP ${refusal.status}), or it is no longer the battery at this address (check its address in your router). Otherwise check the token in the web interface of the battery (Software-Integration, JSON API, Read API) and save it again. Without a change, new try in ${delay(wait).en}.`,
+    fr: `${address} refuse le jeton de lecture (HTTP ${refusal.status}), ou ce n’est plus la batterie à cette adresse (vérifiez son adresse dans votre box). Sinon vérifiez le jeton dans l’interface web de la batterie (Software-Integration, JSON API, Read API) puis enregistrez-le de nouveau. Sans changement, nouvel essai dans ${delay(wait).fr}.`,
   }),
   failing: (address, err, wait) => ({
     en: `${address} could not be read (${reason(err).en}): new try in ${delay(wait).en}.`,
@@ -127,6 +127,14 @@ export const T = {
       en: `Not read this time (error of the battery): ${list.map((n) => ENDPOINT[n].en).join(', ')}; the other values are up to date.`,
       fr: `Non lu cette fois (erreur de la batterie) : ${list.map((n) => ENDPOINT[n].fr).join(', ')} ; les autres valeurs sont à jour.`,
     }),
+    denied: (list) => ({
+      en: `These parts of the API refuse the read token (the configuration takes it): ${list.map((n) => ENDPOINT[n].en).join(', ')}; their values are left out, the others are up to date.`,
+      fr: `Ces parties de l’API refusent le jeton de lecture (la configuration l’accepte) : ${list.map((n) => ENDPOINT[n].fr).join(', ')} ; leurs valeurs sont laissées de côté, les autres sont à jour.`,
+    }),
+    openApi: {
+      en: 'The battery answers without a token: only its address identifies it, give it a fixed address in your router.',
+      fr: 'La batterie répond sans jeton : seule son adresse l’identifie, donnez-lui une adresse fixe dans votre box.',
+    },
     held: (held) =>
       both([
         ...held.map(heldLine),

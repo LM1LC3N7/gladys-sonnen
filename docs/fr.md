@@ -47,6 +47,17 @@ n'est facturé deux fois. L'intégration n'envoie aucune consommation
 journalière. Seul l'index de **production solaire** alimente le suivi
 énergétique.
 
+**Production solaire et onduleur** : une sonnenBatterie eco est couplée en AC,
+avec un onduleur solaire séparé (SMA, Fronius, SolarEdge, Kostal…), et son
+compteur de production mesure cet onduleur. Si votre onduleur envoie déjà sa
+production à Gladys, **ne gardez qu'une source** : choisissez **Capteur
+seulement** dans « Production solaire » **avant** de créer l'appareil. La
+production est alors un simple capteur (kWh, jamais compté) et l'index ne
+reçoit rien. Changer ce choix après la création : un appareil créé garde
+toutes ses fonctionnalités (aucune n'est retirée), seule la fonctionnalité du
+choix en cours reçoit des valeurs ; pour un appareil propre, supprimez-le et
+recréez-le.
+
 ## Prérequis
 
 - Gladys 5.2.0 ou plus récent.
@@ -110,8 +121,15 @@ Gladys compte chaque hausse d'un index en entier. Pour ne jamais compter une
   l'API laisse seulement ses valeurs de côté : les autres sont publiées.
 - Une batterie injoignable est réessayée après 1 minute, puis 2, jusqu'à
   15 minutes, jamais plus vite que l'intervalle.
+- Seul un refus de la **configuration** vaut jeton refusé. Si une autre partie
+  de l'API (compteurs, modules…) refuse le jeton alors que la configuration
+  l'accepte, seules ses valeurs manquent, l'état le dit, les lectures
+  continuent.
 - Chaque lecture commence par la configuration, avec le jeton : une autre
   batterie qui prendrait l'adresse (DHCP) refuse ce jeton et ne donne rien.
+  Une fois par démarrage, l'intégration demande aussi la configuration sans
+  jeton : si la batterie répond quand même, l'état conseille de lui donner une
+  adresse fixe (seule l'adresse l'identifie alors).
 
 ## Confidentialité
 

@@ -52,6 +52,14 @@ const bool = (o, key) => {
   return typeof v === 'boolean' ? v : undefined;
 };
 
+/**
+ * A meter reads a few watts below 0 at rest (the stand-by of a solar inverter
+ * at night): from -200 W to 0 it is 0, never left at the last value of the
+ * day. Further below is out of range (left out).
+ */
+const STANDBY_W = 200;
+const standby = (v) => (v === undefined ? undefined : Math.max(0, v));
+
 /** The keys of which one at least is in a configuration of a sonnenBatterie. */
 const CONFIGURATION_KEYS = [
   'EM_OperatingMode',
@@ -124,9 +132,9 @@ export function parseValues(answers = {}) {
     v.chargePower = v.batteryPower < 0 ? -v.batteryPower : 0;
     v.dischargePower = v.batteryPower > 0 ? v.batteryPower : 0;
   }
-  v.productionPower = read(status, 'Production_W', 0, POWER_MAX);
-  v.consumptionPower = read(status, 'Consumption_W', 0, POWER_MAX);
-  v.consumptionAverage = read(status, 'Consumption_Avg', 0, POWER_MAX);
+  v.productionPower = standby(read(status, 'Production_W', -STANDBY_W, POWER_MAX));
+  v.consumptionPower = standby(read(status, 'Consumption_W', -STANDBY_W, POWER_MAX));
+  v.consumptionAverage = standby(read(status, 'Consumption_Avg', -STANDBY_W, POWER_MAX));
   const feedIn = read(status, 'GridFeedIn_W', -POWER_MAX, POWER_MAX);
   // grid-sensor / power: import > 0, export < 0 (the battery: export > 0).
   v.gridPower = feedIn === undefined ? undefined : feedIn === 0 ? 0 : -feedIn;

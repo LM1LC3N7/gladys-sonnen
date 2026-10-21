@@ -54,6 +54,24 @@
       }
     },
     {
+      "key": "pv_index",
+      "type": "select",
+      "required": false,
+      "default": "energy_monitoring",
+      "label": { "en": "Solar production", "fr": "Production solaire" },
+      "description": {
+        "en": "Energy monitoring: the production meter of the battery is the solar production index of Gladys. Sensor only: a plain sensor, never counted; choose it when your solar inverter (SMA, Fronius, SolarEdge...) already sends its production to Gladys, or it would be counted twice. Chosen before creating the device.",
+        "fr": "Suivi énergétique : le compteur de production de la batterie est l'index de production solaire de Gladys. Capteur seulement : un simple capteur, jamais compté ; à choisir quand votre onduleur solaire (SMA, Fronius, SolarEdge...) envoie déjà sa production à Gladys, sinon elle serait comptée deux fois. À choisir avant de créer l'appareil."
+      },
+      "options": [
+        {
+          "value": "energy_monitoring",
+          "label": { "en": "Energy monitoring", "fr": "Suivi énergétique" }
+        },
+        { "value": "sensor_only", "label": { "en": "Sensor only", "fr": "Capteur seulement" } }
+      ]
+    },
+    {
       "key": "poll_interval",
       "type": "number",
       "required": false,

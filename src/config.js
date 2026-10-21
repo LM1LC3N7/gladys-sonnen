@@ -5,7 +5,14 @@
 // header of a GET.
 // -----------------------------------------------------------------------------
 
-import { DEFAULT_PORT, POLL_DEFAULT, POLL_MAX, POLL_MIN } from './constants.js';
+import {
+  DEFAULT_PORT,
+  POLL_DEFAULT,
+  POLL_MAX,
+  POLL_MIN,
+  PV_ENERGY_MONITORING,
+  PV_SENSOR_ONLY,
+} from './constants.js';
 
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 
@@ -86,6 +93,9 @@ export function normalizeConfig(raw = {}) {
     address: parsed.address,
     token: problem ? undefined : token,
     pollInterval: pollOf(raw?.poll_interval),
+    // The solar production as an index of the energy monitoring (default), or
+    // a plain sensor only (an inverter already sends it to Gladys).
+    pvIndex: raw?.pv_index === PV_SENSOR_ONLY ? PV_SENSOR_ONLY : PV_ENERGY_MONITORING,
     problem,
   };
 }

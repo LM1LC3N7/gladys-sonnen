@@ -46,8 +46,28 @@ test('a refused token stops the read; the error never carries the token nor the 
     assert.ok(!text.includes(TOKEN));
     assert.ok(!text.includes('http'));
   }
-  const secondary = setup({ fail: { '/api/v2/battery': 403 } });
-  assert.equal((await secondary.client.readAll(ADDRESS, TOKEN).catch((e) => e)).code, 'refused');
+});
+
+test('review 1, point 1: a 401/403 of a secondary endpoint only leaves it out (denied)', async () => {
+  const { client, fake } = setup({ fail: { '/api/v2/battery': 403, '/api/v2/latestdata': 401 } });
+  const read = await client.readAll(ADDRESS, TOKEN);
+  assert.deepEqual(read.denied, ['latest', 'battery']);
+  assert.deepEqual(read.missing, []);
+  assert.equal(read.status.USOC, 81);
+  assert.ok(read.powermeter);
+  assert.equal(fake.calls.length, 5);
+});
+
+test('review 1, point 3: the configuration asked once without a token', async () => {
+  const closed = setup();
+  assert.equal(await closed.client.answersWithoutToken(ADDRESS), false);
+  assert.equal(closed.fake.calls[0].init.headers['Auth-Token'], undefined);
+  const open = setup({
+    fail: { '/api/v2/configurations': () => json({ EM_OperatingMode: '2' }) },
+  });
+  assert.equal(await open.client.answersWithoutToken(ADDRESS), true);
+  const none = new SonnenClient({ fetchImpl: createFetch({}).fetch });
+  assert.equal(await none.answersWithoutToken(ADDRESS), false);
 });
 
 test('a 5xx on a secondary endpoint leaves its values out; the others are read', async () => {
@@ -122,5 +142,11 @@ test('read-only: the client has no method that writes, and never another verb', 
   assert.doesNotMatch(source, /method: '(POST|PUT|PATCH|DELETE)'/);
   assert.doesNotMatch(source, /\/api\/v2\/(setpoint|configurations\/)/i);
   const methods = Object.getOwnPropertyNames(SonnenClient.prototype);
-  assert.deepEqual(methods.sort(), ['constructor', 'get', 'readAll', 'readConfigurations']);
+  assert.deepEqual(methods.sort(), [
+    'answersWithoutToken',
+    'constructor',
+    'get',
+    'readAll',
+    'readConfigurations',
+  ]);
 });

@@ -78,6 +78,18 @@ test('hostile answers: never the prototype, never a text read as a number, range
   assert.equal(both.batteryState, undefined, 'both at once is not a state');
 });
 
+test('review 1, point 5: -200 to 0 W of production or consumption is 0; further below, left out', () => {
+  const a = answers();
+  Object.assign(a['/api/v2/status'], { Production_W: -3, Consumption_W: -150 });
+  const v = parseValues(read(a));
+  assert.equal(v.productionPower, 0);
+  assert.equal(v.consumptionPower, 0);
+  Object.assign(a['/api/v2/status'], { Production_W: -201, Consumption_W: -5000 });
+  const w = parseValues(read(a));
+  assert.equal(w.productionPower, undefined);
+  assert.equal(w.consumptionPower, undefined);
+});
+
 test('the configuration of a sonnenBatterie is recognised; another answer is not', () => {
   assert.ok(isConfigurations({ EM_OperatingMode: '2' }));
   assert.ok(!isConfigurations({ device: { sn: 'x' } }));

@@ -31,8 +31,11 @@ test('the configuration: problems named, the token never kept when invalid', () 
     address: '192.168.1.50:80',
     token: TOKEN,
     pollInterval: 45,
+    pvIndex: 'energy_monitoring',
     problem: undefined,
   });
+  assert.equal(normalizeConfig({ pv_index: 'sensor_only' }).pvIndex, 'sensor_only');
+  assert.equal(normalizeConfig({ pv_index: 'other' }).pvIndex, 'energy_monitoring');
   assert.equal(normalizeConfig({ poll_interval: 5 }).pollInterval, 30);
   assert.equal(normalizeConfig({ poll_interval: 9999 }).pollInterval, 300);
   assert.equal(normalizeConfig({ poll_interval: 'x' }).pollInterval, 30);
