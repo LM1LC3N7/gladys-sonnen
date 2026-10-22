@@ -10,6 +10,13 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Coming back from "Sensor only" to the energy monitoring on an existing
+  device, the first value of the solar production index is held as a jump
+  (accepted only with the two clicks): the production of the period, already
+  counted by the inverter, is no longer counted at once.
+
 ## [0.1.1] - 2026-10-21
 
 ### Added

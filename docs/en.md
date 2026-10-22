@@ -52,7 +52,10 @@ production to Gladys, **keep only one source**: choose **Sensor only** in
 plain sensor (kWh, never counted) and the index gets nothing. Changing this
 choice after the creation: a created device keeps all its features (none is
 removed), only the feature of the current choice gets values; for a clean
-device, delete it and create it again.
+device, delete it and create it again. Coming back from "Sensor only" to the
+energy monitoring, the first value of the index is **held** as a jump (the
+production of the period, already counted by the inverter, is never counted at
+once): accept it with the two clicks only if it should be.
 
 ## Requirements
 

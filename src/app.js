@@ -188,6 +188,19 @@ export class SonnenApp {
         changed = true;
       }
     }
+    if (this.config.pvIndex !== this.kept.pvMode) {
+      // Back from "Sensor only" to the energy monitoring: what was produced
+      // meanwhile (maybe days, already counted by the inverter) must not be
+      // counted at once by the old reference of the guard: the first value
+      // is held as a jump, for the two-click acceptance.
+      if (this.kept.pvMode === PV_SENSOR_ONLY && this.indexMode()) {
+        this.kept.pvResume = true;
+      } else if (!this.indexMode()) {
+        this.kept.pvResume = false;
+      }
+      this.kept.pvMode = this.config.pvIndex;
+      changed = true;
+    }
     if (changed) {
       await this.saveState();
     }
@@ -359,6 +372,8 @@ export class SonnenApp {
       pause: this.kept.pause,
       refusal: this.kept.refusal,
       info: this.kept.info,
+      pvMode: this.kept.pvMode,
+      pvResume: this.kept.pvResume,
       indexes,
     };
     const key = JSON.stringify(state);
@@ -551,6 +566,16 @@ export class SonnenApp {
       if (total === undefined) {
         indexes[key] = guard.held ? guard.last?.value : undefined;
         continue;
+      }
+      if (this.kept.pvResume) {
+        // The first value after a return from "Sensor only".
+        this.kept.pvResume = false;
+        const from = guard.last?.value;
+        if (from !== undefined && total > from && !guard.held) {
+          // Held as a jump (src/guard.js keeps it held at or above it, the
+          // acceptance in two clicks takes it); never counted at once.
+          guard.held = { direction: 'up', from, to: total, threshold: total, at: now };
+        }
       }
       const plausible = guard.accept(total, now);
       const held = guard.held ? `${guard.held.direction}:${guard.held.from}` : undefined;

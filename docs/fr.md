@@ -56,7 +56,10 @@ production est alors un simple capteur (kWh, jamais compté) et l'index ne
 reçoit rien. Changer ce choix après la création : un appareil créé garde
 toutes ses fonctionnalités (aucune n'est retirée), seule la fonctionnalité du
 choix en cours reçoit des valeurs ; pour un appareil propre, supprimez-le et
-recréez-le.
+recréez-le. En revenant de « Capteur seulement » au suivi énergétique, la
+première valeur de l'index est **retenue** comme un saut (la production de la
+période, déjà comptée par l'onduleur, n'est jamais comptée d'un coup) :
+acceptez-la en deux clics seulement si elle doit l'être.
 
 ## Prérequis
 

@@ -46,10 +46,11 @@ function* texts(node, path = '') {
   }
 }
 
-test('the store basics; version 0.1.0 everywhere', () => {
+test('the store basics; the same version everywhere', () => {
   assert.equal(manifest.manifest_version, 1);
   assert.equal(manifest.type, 'device');
-  assert.equal(pkg.version, '0.1.0');
+  // Owned by the Release workflow (0.1.0 by hand, then each release).
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.equal(manifest.docker_image, `ghcr.io/lm1lc3n7/gladys-sonnen:${manifest.version}`);
   assert.equal(manifest.version, pkg.version);
   assert.equal(lock.version, pkg.version);

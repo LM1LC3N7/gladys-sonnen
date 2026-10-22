@@ -508,3 +508,37 @@ test('review 1, point 8: a restart during the Discovery of a read leaves it with
   assert.equal(calls, 2);
   assert.equal(gladys.fake.connectionStatuses.length, 1, 'only the status of the start');
 });
+
+test('0.1.2: back from "Sensor only", the production of the period is held, never counted at once', async () => {
+  const store = createMemoryStore();
+  const routes = battery();
+  const DAY = 24 * 60 * MINUTE;
+  const sensorConfig = { ...CONFIG, pv_index: 'sensor_only' };
+  const { app, gladys, clock, tick } = await setup({
+    store,
+    routes,
+    config: sensorConfig,
+    devices: [created({ index: { value: 3969.8, at: NOW - MINUTE } })],
+  });
+  await app.start(sensorConfig);
+  await app.idle();
+  assert.equal(last(gladys, 'pv_energy'), undefined);
+  // Three days in "Sensor only": 60 kWh produced (the inverter counted them).
+  routes.state.answers['/api/v2/powermeter'][0].kwh_imported = 4029.8;
+  clock.now += 3 * DAY;
+  await app.start(CONFIG, { fresh: true });
+  await app.idle();
+  assert.notEqual(last(gladys, 'pv_energy'), 4029.8, 'not counted at once');
+  assert.equal(store.data.pvResume, false);
+  assert.equal(store.data.indexes[F('pv_energy')].held.to, 4029.8);
+  assert.match(status(gladys).message.fr, /saut de 3969.8 à 4029.8 kWh/);
+  // Held across the next reads, until the two clicks.
+  routes.state.answers['/api/v2/powermeter'][0].kwh_imported = 4029.9;
+  await tick();
+  assert.notEqual(last(gladys, 'pv_energy'), 4029.9);
+  await gladys.fake.action(ACTIONS.ACCEPT_HELD);
+  await tick(5 * SECOND);
+  assert.match((await gladys.fake.action(ACTIONS.ACCEPT_HELD)).data.message.en, /Accepted/);
+  await tick();
+  assert.equal(last(gladys, 'pv_energy'), 4029.9);
+});

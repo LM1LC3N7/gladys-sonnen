@@ -156,6 +156,11 @@ export function readState(raw, now, { maxPause, maxRefusal }) {
     // Kept until a read succeeds (its count spaces the next tries), past its end too.
     refusal: address && refusal ? refusal : null,
     info: validInfo(data.info) ?? null,
+    // The `pv_index` option of the last start, and whether the solar index
+    // came back from "Sensor only" and its first value is still to be held.
+    pvMode:
+      data.pvMode === 'sensor_only' || data.pvMode === 'energy_monitoring' ? data.pvMode : null,
+    pvResume: data.pvResume === true,
     indexes,
   };
 }
